@@ -2,52 +2,41 @@
 #include <Windows.h>
 #include <ctime>
 #include <cstdlib>
+#include <ctime>
 
-struct Point {
-	int x;
-	int y;
-};
 
 class Field;
+class Fruit;
 
-//-------------------------class Snake---------------------------------//
-class Snake {
-public:
-	enum class Direction {
-		LEFT,
-		UP,
-		RIGHT,
-		DOWN
-	};
+//--------------------------class Point----------------------------//
+class Point {
 private:
-	Point* m_arr;
-	int m_length = 1;
-	Direction m_dir{ Direction::RIGHT };
-	bool m_isAlive{ true };
-
-	const int max_length;
+	int m_x = 0;
+	int m_y = 0;
 public:
+	Point() {};
+	Point(int x, int y) : m_x(x), m_y(y) {};
 
-	Snake(int length) : max_length(length) {
-		m_arr = new Point[max_length];
-	};
-	~Snake() {
-		delete[] m_arr;
+	int getX() {
+		return m_x;
 	}
-
-	const Point* getSnakeCoord() const {
-		return  m_arr;
+	int getY() {
+		return m_y;
 	}
-	int getCurrentLength() const {
-		return m_length;
+	static Point generateRandomPoint(int fieldWidth, int fieldHeight) {
+		int x, y;
+		do {
+			x = rand() % (fieldWidth - 1);
+			y = rand() % (fieldHeight - 1);
+		} while (x == 0 || y == 0);
+		return Point(x, y);
 	}
-
-	bool IsAlive() {
-		return m_isAlive;
-	}
-	void update(HANDLE h, const Field &field);
-
+	friend bool operator==(const Point& p1, const Point& p2);
 };
+
+bool operator==(const Point& p1, const Point& p2) {
+	return (p1.m_x == p2.m_x && p1.m_y == p2.m_y);
+}
 
 //-------------------------class Field---------------------------------//
 class Field {
@@ -78,25 +67,149 @@ public:
 			WriteConsoleOutputCharacterA(h, chr, 1, coord, &written);
 		}
 	}
-	friend void Snake::update(HANDLE h, const Field& field);
+	int getWidth() const { return m_width; }
+	int getHeight() const { return m_height; }
 };
 
+//-------------------------class Snake---------------------------------//
+class Snake {
+public:
+	enum class Direction {
+		LEFT,
+		UP,
+		RIGHT,
+		DOWN
+	};
+private:
+	Point* m_arr;
+	const int max_length;
+	int m_length = 1;
+	Direction m_dir{ Direction::RIGHT };
+	bool m_isAlive{ true };
+	bool m_isEaten{ false };
+
+public:
+	//constructor, destructor                                 
+	Snake(int length) : max_length(length) {
+		m_arr = new Point[max_length+1]; //for >>
+		*m_arr = Point(1, 1); //the start position of the snake
+	};
+	~Snake() {
+		delete[] m_arr;
+	}
+
+	//length of the snake
+	void increaseLength() {
+		++m_length;
+	}
+	int getCurrentLength() const {
+		return m_length;
+	}
+
+	//the life status of the snake
+	void setIsAlive(const Field& f) {
+		Point p = this->getHeadCoord(); //border check
+		if (p.getX() >= (f.getWidth() - 1) || p.getX() == 0) m_isAlive = false;
+		if (p.getY() >= (f.getHeight() - 1) || p.getY() == 0) m_isAlive = false;
+
+		for (int count = 1; count < m_length; ++count) { //snake stuck check
+			if (m_arr[count] == p) {
+				m_isAlive = false;
+			}
+		}
+	}
+	bool getIsAlive() {
+		return m_isAlive;
+	}
+	bool hasWon() {
+		return max_length <= m_length;
+	}
+
+	//reprint the snake
+	void updatePosition() {
+		for (int count = m_length - 1; count >= 0; --count) {
+			m_arr[count + 1] = m_arr[count]; //сдвиг вправо на единицу
+		}
+		int head_x = m_arr[1].getX();
+		int	head_y = m_arr[1].getY();
+
+		switch (m_dir) {
+		case Direction::DOWN:
+			head_y -= 1;
+			break;
+		case Direction::LEFT:
+			head_x -= 1;
+			break;
+		case Direction::RIGHT:
+			head_x += 1;
+			break;
+		case Direction::UP:
+			head_y += 1;
+			break;
+		}
+		Point newHead(head_x, head_y);
+		m_arr[0] = newHead;
+	}
+
+	void updateDirection() {
+		if ((GetKeyState('W') & 0x8000) && (m_dir != Direction::UP)) m_dir = Direction::DOWN;
+		if ((GetKeyState('A') & 0x8000) && (m_dir != Direction::RIGHT)) m_dir = Direction::LEFT;
+		if ((GetKeyState('S') & 0x8000) && (m_dir != Direction::DOWN)) m_dir = Direction::UP;
+		if ((GetKeyState('D') & 0x8000) && (m_dir != Direction::LEFT)) m_dir = Direction::RIGHT;
+	}
+
+	void print(HANDLE h) {
+		DWORD written;
+		COORD coord;
+		char snake_chr = 'O';
+		const char* chr = &snake_chr;
+
+		//painting the head.
+		Point head = m_arr[0];
+		coord.X = head.getX();
+		coord.Y = head.getY();
+		WriteConsoleOutputCharacterA(h, chr, 1, coord, &written);
+
+		//removing the tail.
+		Point oldTail = m_arr[m_length];
+		coord.X = oldTail.getX();
+		coord.Y = oldTail.getY();
+		snake_chr = ' ';
+		WriteConsoleOutputCharacterA(h, chr, 1, coord, &written);
+	}
+	//to check whether the snake is alive
+	const Point& getHeadCoord() const {
+		return *m_arr; //the head of the snake always is the first element of the arr.
+	}
+
+};
 
 //-------------------------class Fruit---------------------------------//
 class Fruit {
 private:
 	Point m_pos;
+	const char m_chr;
 public:
+	Fruit(char chr = '&') : m_chr(chr) {
+	}
+
+	void setCoordinates(Point& p) {
+		m_pos = p;
+	}
 	const Point& getCoordinates() {
 		return m_pos;
 	}
+
+	void print(HANDLE h) {
+		DWORD written;
+		COORD coord;
+
+		const char* chr = &m_chr;
+		coord.X = m_pos.getX();
+		coord.Y = m_pos.getY();
+		WriteConsoleOutputCharacterA(h, chr, 1, coord, &written);
+	}
 };
-
-//-------------------------friend-----------------------------------//
-void Snake::update(HANDLE h, const Field& field) {
-
-}
-
 
 //-------------------------main()---------------------------------//
 int main() {
@@ -114,8 +227,37 @@ int main() {
 	HANDLE stdOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	SetCursorPos(40, 40);
 	field.printBorder(stdOut);
-	while (snake.IsAlive()) {
 
+	//установка системных часов для правильной генерации случайных чисел
+	srand(static_cast<unsigned int>(time(0)));
+	Fruit fruit;
+	Point p = Point::generateRandomPoint(field.getWidth(), field.getHeight());
+	fruit.setCoordinates(p);
+	fruit.print(stdOut);
+
+	while (true) {
+		snake.updateDirection();
+		snake.updatePosition();
+		snake.print(stdOut);
+		snake.setIsAlive(field);
+		if (snake.getHeadCoord() == fruit.getCoordinates()) {
+			snake.increaseLength();
+			p = Point::generateRandomPoint(field.getWidth(), field.getHeight());
+			fruit.setCoordinates(p);	
+			fruit.print(stdOut);
+		}
+		if (!snake.getIsAlive()) {
+			std::system("CLS");
+			std::cout << "You lost with the length " << snake.getCurrentLength() << std::endl;
+			break;
+		}
+		if (snake.hasWon()) {
+			std::system("CLS");
+			std::cout << "You has won this game." << std::endl;
+			break;
+		}
+		Sleep(100);
 	}
-	snake.update(stdOut, field);
+	Sleep(1000);
+	std::cout << "\nPress enter to exit.";
 }
