@@ -37,7 +37,7 @@ public:
 			--arr[p.getY() - 1]; //because permissible cords starts with 0, not with 1.
 		}
 
-		int string; //find string that has positive amount of permissible cords. (there are fieldHeight - 2 strings)
+		int string; //f5ind string that has positive amount of permissible cords. (there are fieldHeight - 2 strings)
 		do {
 			string = rand() % (fieldHeight - 2);
 		} while (arr[string] == 0);
@@ -52,7 +52,9 @@ public:
 		}
 		for (int count = 0; count < snakeLength; ++count) {
 			p = snakeArr[count];
-			arr2[p.getX() - 1] = 0; //because permissible cords starts with 0.
+			if ((p.getY() - 1) == string) {
+				arr2[p.getX() - 1] = 0; //because permissible cords starts with 0.
+			}
 		}
 		int column2;
 		for (column2 = 0; column2 < fieldWidth - 2; ++column2) {
@@ -63,7 +65,7 @@ public:
 				--column; //because permissible cord can be zero.
 			}
 		}
-		return Point(string, column2);
+		return Point(++column2, ++string);
 	}
 };
 
